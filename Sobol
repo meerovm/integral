@@ -1,0 +1,166 @@
+//Код является адаптацией web.maths.unsw.edu.au/~fkuo/sobol/?hl=ru-RU
+//Для работы требуется подключить файл "new-joe-kuo-6.21201" с сайта выше
+
+
+#include <iostream>
+#include <fstream>
+
+class sobol
+{
+private:
+
+    const unsigned d;
+    unsigned* x;
+    unsigned Ns = 1;
+    const unsigned max_length;
+    unsigned** V;
+public:
+
+    // Конструктор принимает размерность dm, максимальное кол-во точек, которое может быть сгенерированно ml, файл dir_file 
+    // Требует O(dm * log(ml)) памяти
+
+    sobol(const unsigned dm, const unsigned ml, char* dir_file) : max_length(ml), d(dm)
+    {
+        std::ifstream infile(dir_file, std::ios::in);
+        if (!infile) {
+            std::cout << "Input file containing direction numbers cannot be found!\n";
+            exit(1);
+        }
+        char buffer[1000];
+        infile.getline(buffer, 1000, '\n');
+
+        const unsigned L = (unsigned)ceil(log((double)(ml)) / log(2.0));
+        V = new unsigned* [d];
+        V[0] = new unsigned[L + 1];
+        for (unsigned i = 1; i <= L; i++) V[0][i] = 1 << (32 - i);
+        for (int j = 1; j <= d - 1; j++) {
+            V[j] = new unsigned[L + 1];
+            unsigned d, s, a;
+            infile >> d >> s >> a;
+            unsigned* m = new unsigned[s + 1];
+            for (unsigned i = 1; i <= s; i++) infile >> m[i];
+            if (L <= s) {
+                for (unsigned i = 1; i <= L; i++) V[j][i] = m[i] << (32 - i);
+            }
+            else {
+                for (unsigned i = 1; i <= s; i++) V[j][i] = m[i] << (32 - i);
+                for (unsigned i = s + 1; i <= L; i++) {
+                    V[j][i] = V[j][i - s] ^ (V[j][i - s] >> s);
+                    for (unsigned k = 1; k <= s - 1; k++) {
+                        V[j][i] ^= (((a >> (s - 1 - k)) & 1) * V[j][i - k]);
+                    }
+                }
+            }
+            delete[] m;
+        }
+        x = new unsigned[d];
+        for (int i = 0; i < d; i++) { x[i] = 0; }
+    }
+
+
+    ~sobol() {
+        delete[]x;
+        for (int i = 0; i < d; i++) {
+            delete[] V[i];
+        }
+        delete[] V;
+    }
+
+    // Генерируем N точек начиная со следующей, после последней сгенерированной, D - размерность
+    // Требует O(N) доп памяти
+
+    double** sobol_points(const unsigned N, const unsigned D)
+    {
+        if ((Ns + N - 1) > max_length) {
+            std::cout << "the count of numbers more the maximum";
+            exit(1);
+        }
+
+        double** POINTS = new double* [N];
+        for (unsigned i = 0; i <= N - 1; i++) POINTS[i] = new double[D];
+        for (unsigned j = 0; j <= D - 1; j++) POINTS[0][j] = 0;
+
+        unsigned* right_index = new unsigned[N + 1];
+        for (int i = 0; i < N + 1; i++) {
+            unsigned C = 1;
+            if ((i + Ns - 1) != 0) {
+                unsigned value = i + Ns - 1;
+                while (value & 1) {
+                    value >>= 1;
+                    C++;
+                }
+            }
+            right_index[i] = C;
+        }
+        unsigned* X = new unsigned[N + 1];
+        X[0] = x[0];
+        for (unsigned i = 0; i <= N - 1; i++) {
+            POINTS[i][0] = (double)X[i] / pow(2.0, 32);
+            X[i + 1] = X[i] ^ (V[0][right_index[i]]);
+        }
+        x[0] = X[N];
+        delete[] X;
+
+        for (unsigned j = 1; j <= D - 1; j++) {
+            unsigned* X = new unsigned[N + 1];
+            X[0] = x[j];
+            for (unsigned i = 0; i <= N - 1; i++) {
+                POINTS[i][j] = (double)X[i] / pow(2.0, 32);
+                X[i + 1] = X[i] ^ V[j][right_index[i]];
+            }
+            x[j] = X[N];
+            delete[]X;
+        }
+        Ns += N;
+        return POINTS;
+    }
+
+    // пропускает первые k точек с начала (не с текущей точки)
+    // работает за O(d)
+    void skip_ahead(const unsigned k)
+    {
+        Ns = k;
+        unsigned g;
+        for (unsigned j = 0; j < d; j++) {
+            unsigned xx = 0;
+            g = Ns ^ (Ns >> 1);
+            for (unsigned l = 0; l < 32; l++) {
+                if ((g >> l) & 1) {
+                    xx ^= V[j][l + 1];
+                }
+            }
+            x[j] = xx;
+        }
+        Ns++;
+    }
+};
+
+int main()
+{
+    const unsigned Nn = 10;
+    const unsigned D = 5;
+    char f[] = "new-joe-kuo-6.21201";
+    sobol s(D, 4 * Nn, f);
+    double** P = s.sobol_points(Nn * 2, D);
+    s.skip_ahead(Nn * 2);
+    double** R = s.sobol_points(2 * Nn, D);
+
+
+    for (unsigned i = 0; i < Nn * 2; i++) {
+        for (unsigned j = 0; j <= D - 1; j++) std::cout << P[i][j] << " ";
+        delete[] P[i];
+        std::cout << std::endl;
+    }
+    delete[] P;
+    std::cout << std::endl;
+
+
+    for (unsigned i = 0; i < 2 * Nn; i++) {
+        for (unsigned j = 0; j <= D - 1; j++) std::cout << R[i][j] << " ";
+        delete[] R[i];
+        std::cout << std::endl;
+    }
+    delete[] R;
+    std::cout << std::endl;
+
+}
