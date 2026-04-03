@@ -1,0 +1,163 @@
+//Код является адаптацией web.maths.unsw.edu.au/~fkuo/sobol/?hl=ru-RU
+//Для работы требуется с++20
+
+
+#include <iostream>
+#include <fstream>
+#include <bit>
+
+class sobol
+{
+private:
+
+    const unsigned d;
+    unsigned* x;
+    unsigned Ns = 1;
+    const unsigned max_length;
+    unsigned** V;
+    unsigned bufer[460] = {2, 1, 0, 1, 3, 2, 1, 1, 3, 4, 3, 1, 1, 3, 1, 5, 3, 2, 1, 1, 1, 6, 4, 1, 1, 1, 3, 3, 7, 4, 4, 1, 3, 5, 13, 8, 5, 2, 1, 1, 5, 5, 17, 9, 5, 4, 1, 1, 5, 5, 5, 10, 5, 7, 1, 1, 7, 11, 19, 11, 5, 11, 1, 1, 5, 1, 1, 12, 5, 13, 1, 1, 1, 3, 11, 13, 5, 14, 1, 3, 5, 5, 31, 14, 6, 1, 1, 3, 3, 9, 7, 49, 15, 6, 13, 1, 1, 1, 15, 21, 21, 16, 6, 16, 1, 3, 1, 13, 27, 49, 17, 6, 19, 1, 1, 1, 15, 7, 5, 18, 6, 22, 1, 3, 1, 15, 13, 25, 19, 6, 25, 1, 1, 5, 5, 19, 61, 20, 7, 1, 1, 3, 7, 11, 23, 15, 103, 21, 7, 4, 1, 3, 7, 13, 13, 15, 69, 22, 7, 7, 1, 1, 3, 13, 7, 35, 63, 23, 7, 8, 1, 3, 5, 9, 1, 25, 53, 24, 7, 14, 1, 3, 1, 13, 9, 35, 107, 25, 7, 19, 1, 3, 1, 5, 27, 61, 31, 26, 7, 21, 1, 1, 5, 11, 19, 41, 61, 27, 7, 28, 1, 3, 5, 3, 3, 13, 69, 28, 7, 31, 1, 1, 7, 13, 1, 19, 1, 29, 7, 32, 1, 3, 7, 5, 13, 19, 59, 30, 7, 37, 1, 1, 3, 9, 25, 29, 41, 31, 7, 41, 1, 3, 5, 13, 23, 1, 55, 32, 7, 42, 1, 3, 7, 3, 13, 59, 17, 33, 7, 50, 1, 3, 1, 3, 5, 53, 69, 34, 7, 55, 1, 1, 5, 5, 23, 33, 13, 35, 7, 56, 1, 1, 7, 7, 1, 61, 123, 36, 7, 59, 1, 1, 7, 9, 13, 61, 49, 37, 7, 62, 1, 3, 3, 5, 3, 55, 33, 38, 8, 14, 1, 3, 1, 15, 31, 13, 49, 245, 39, 8, 21, 1, 3, 5, 15, 31, 59, 63, 97, 40, 8, 22, 1, 3, 1, 11, 11, 11, 77, 249, 41, 8, 38, 1, 3, 1, 11, 27, 43, 71, 9, 42, 8, 47, 1, 1, 7, 15, 21, 11, 81, 45, 43, 8, 49, 1, 3, 7, 3, 25, 31, 65, 79, 44, 8, 50, 1, 3, 1, 1, 19, 11, 3, 205, 45, 8, 52, 1, 1, 5, 9, 19, 21, 29, 157, 46, 8, 56, 1, 3, 7, 11, 1, 33, 89, 185, 47, 8, 67, 1, 3, 3, 3, 15, 9, 79, 71, 48, 8, 70, 1, 3, 7, 11, 15, 39, 119, 27, 49, 8, 84, 1, 1, 3, 1, 11, 31, 97, 225, 50, 8, 97, 1, 1, 1, 3, 23, 43, 57, 177};
+
+public:
+
+    // Конструктор принимает размерность dm <= 50, максимальное кол-во точек, которое может быть сгенерированно ml, файл dir_file 
+    // Требует O(dm * log(ml)) памяти
+
+    sobol(const unsigned dm, const unsigned ml) : max_length(ml), d(dm)
+    {
+        if (dm > 50) {
+            std::cout << "size d exceeded\n";
+            exit(1);
+        }
+        int bufer_index = 0;
+        const unsigned L = (unsigned)ceil(log((double)(ml)) / log(2.0));
+        V = new unsigned* [d];
+        V[0] = new unsigned[L + 1];
+        for (unsigned i = 1; i <= L; i++) V[0][i] = 1 << (32 - i);
+        for (int j = 1; j <= d - 1; j++) {
+            V[j] = new unsigned[L + 1];
+            unsigned d, s, a;
+            d = bufer[bufer_index];
+            s = bufer[bufer_index + 1];
+            a = bufer[bufer_index + 2];
+            bufer_index += 3;
+            if (L <= s) {
+                const int start = bufer_index - 1;
+                for (; bufer_index - start <= L; bufer_index++) V[j][bufer_index - start] = bufer[bufer_index] << (32 - bufer_index + start);
+            }
+            else {
+                const int start = bufer_index - 1;
+                for (; bufer_index - start <= s; bufer_index++) V[j][bufer_index - start] = bufer[bufer_index] << (32 - bufer_index + start);
+                for (unsigned i = s + 1; i <= L; i++) {
+                    V[j][i] = V[j][i - s] ^ (V[j][i - s] >> s);
+                    for (unsigned k = 1; k <= s - 1; k++) {
+                        V[j][i] ^= (((a >> (s - 1 - k)) & 1) * V[j][i - k]);
+                    }
+                }
+            }
+        }
+        x = new unsigned[d];
+        for (int i = 0; i < d; i++) { x[i] = 0; }
+    }
+
+
+    ~sobol() {
+        delete[]x;
+        for (int i = 0; i < d; i++) {
+            delete[] V[i];
+        }
+        delete[] V;
+    }
+
+    // Генерируем N точек начиная со следующей, после последней сгенерированной, D - размерность
+
+    double** sobol_points(const unsigned N, const unsigned D)
+    {
+        if ((Ns + N - 1) > max_length) {
+            std::cout << "the count of numbers more the maximum";
+            exit(1);
+        }
+
+        double** POINTS = new double* [N];
+        for (unsigned i = 0; i <= N - 1; i++) POINTS[i] = new double[D];
+        for (unsigned j = 0; j <= D - 1; j++) POINTS[0][j] = 0;
+
+        unsigned* right_index = new unsigned[N + 1];
+        for (int i = 0; i < N + 1; i++) {
+            unsigned C = 1;
+            if ((i + Ns - 1) != 0) {
+                unsigned value = i + Ns - 1;
+                while (value & 1) {
+                    value >>= 1;
+                    C++;
+                }
+            }
+            right_index[i] = C;
+        }
+        POINTS[0][0] = x[0];
+        for (unsigned i = 0; i <= N - 2; i++) {
+            POINTS[i + 1][0] = (unsigned) POINTS[i][0] ^ (V[0][std::countr_one(i + Ns - 1) + 1]);
+            POINTS[i][0] /= pow(2.0, 32);
+        }
+        x[0] = (unsigned)POINTS[N-1][0] ^ (V[0][std::countr_one(N - 2  + Ns) + 1]);
+        POINTS[N-1][0] /= pow(2.0, 32);
+        for (unsigned j = 1; j <= D - 1; j++) {
+            POINTS[0][j] = x[j];
+            for (unsigned i = 0; i <= N - 2; i++) {
+                POINTS[i + 1][j] = (unsigned)POINTS[i][j] ^ (V[j][std::countr_one(i + Ns - 1) + 1]);
+                POINTS[i][j] /= pow(2.0, 32);
+            }
+            x[0] = (unsigned)POINTS[N - 1][j] ^ (V[j][std::countr_one(N - 2 + Ns) + 1]);
+            POINTS[N - 1][j] /= pow(2.0, 32);
+        }
+        Ns += N;
+        return POINTS;
+    }
+
+    // пропускает первые k точек с начала (не с текущей точки)
+    // работает за O(d)
+    void skip_ahead(const unsigned k)
+    {
+        Ns = k;
+        unsigned g;
+        for (unsigned j = 0; j < d; j++) {
+            unsigned xx = 0;
+            g = Ns ^ (Ns >> 1);
+            for (unsigned l = 0; l < 32; l++) {
+                if ((g >> l) & 1) {
+                    xx ^= V[j][l + 1];
+                }
+            }
+            x[j] = xx;
+        }
+        Ns++;
+    }
+};
+
+int main()
+{
+    const unsigned Nn = 10;
+    const unsigned D = 5;
+    sobol s(D, 4 * Nn);
+    double** P = s.sobol_points(Nn * 2, D);
+    s.skip_ahead(Nn * 2);
+    double** R = s.sobol_points(2 * Nn, D);
+
+
+    for (unsigned i = 0; i < Nn * 2; i++) {
+        for (unsigned j = 0; j <= D - 1; j++) std::cout << P[i][j] << " ";
+        delete[] P[i];
+        std::cout << std::endl;
+    }
+    delete[] P;
+    std::cout << std::endl;
+
+
+    for (unsigned i = 0; i < 2 * Nn; i++) {
+        for (unsigned j = 0; j <= D - 1; j++) std::cout << R[i][j] << " ";
+        delete[] R[i];
+        std::cout << std::endl;
+    }
+    delete[] R;
+    std::cout << std::endl;
+
+}
