@@ -106,7 +106,7 @@ public:
                 POINTS[i + 1][j] = (unsigned)POINTS[i][j] ^ (V[j][std::countr_one(i + Ns - 1) + 1]);
                 POINTS[i][j] /= pow(2.0, 32);
             }
-            x[0] = (unsigned)POINTS[N - 1][j] ^ (V[j][std::countr_one(N - 2 + Ns) + 1]);
+            x[j] = (unsigned)POINTS[N - 1][j] ^ (V[j][std::countr_one(N - 2 + Ns) + 1]);
             POINTS[N - 1][j] /= pow(2.0, 32);
         }
         Ns += N;
